@@ -1,0 +1,64 @@
+networks:
+  traefik_traefik:
+    external: true
+
+services:
+  opensearch:
+    image: opensearchproject/opensearch:2.19.0
+    container_name: opensearch
+    ports:
+      - 9200:9200
+      - 9600:9600
+    volumes:
+      - ./volumes/opensearch/opensearch-data:/usr/share/opensearch/data
+      - ./volumes/opensearch/custom-config/config.yml:/usr/share/opensearch/config/opensearch-security/config.yml
+    env_file:
+      - .env
+    environment:
+      - cluster.name=opensearch-cluster
+      - node.name=opensearch
+      - discovery.type=single-node
+      - bootstrap.memory_lock=true
+      - "DISABLE_INSTALL_DEMO_CONFIG=false"
+      - "DISABLE_SECURITY_PLUGIN=false"
+      - OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m
+      - OPENSEARCH_INITIAL_ADMIN_PASSWORD=BWbqXm_z12
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+    networks:
+      - traefik_traefik
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s -k -u admin:${OPENSEARCH_INITIAL_ADMIN_PASSWORD} https://localhost:9200/_cluster/health | grep -q '\"status\":\"yellow\"'"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  opensearch-dashboards:
+    image: opensearchproject/opensearch-dashboards:2.19.0
+    container_name: opensearch-dashboards
+    depends_on:
+      opensearch:
+        condition: service_completed_successfully
+    env_file:
+      - .env
+    ports:
+      - 5601:5601
+    expose:
+      - "5601"
+    volumes:
+      - ./volumes/opensearch-dashboard/data:/usr/share/opensearch-dashboards/data
+      - ./volumes/opensearch-dashboard/custom-config/opensearch_dashboards.yml:/usr/share/opensearch-dashboards/config/opensearch_dashboards.yml
+    networks:
+      - traefik_traefik
+    healthcheck:
+      test: [ "CMD-SHELL", "curl -s http://localhost:5601/api/status | grep -q '\"state\":\"green\"'" ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s

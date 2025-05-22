@@ -1,0 +1,96 @@
+networks:
+  traefik_traefik:
+    external: true
+
+services:
+
+  db:
+    image: mysql:8.3.0
+    container_name: db
+    command: mysqld --character-set-server=utf8 --collation-server=utf8_general_ci
+    ports:
+      - '3306:3306'
+    volumes:
+      - ./volumes/db/data:/var/lib/mysql
+    environment:
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+      - MYSQL_DATABASE=${MYSQL_DATABASE}
+      - MYSQL_USER=${MYSQL_USER}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
+      - MYSQL_ROOT_HOST=%
+    env_file:
+      - .env
+    healthcheck:
+      test: [ "CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-u${MYSQL_USER}", "-p${MYSQL_PASSWORD}", "--silent" ]
+      interval: 20s
+      timeout: 5s
+      retries: 3
+    networks:
+      traefik_traefik:
+        aliases:
+          - db.local
+
+  db-init:
+    image: mysql:8.3.0
+    container_name: mysql-init-script
+    depends_on:
+      db:
+        condition: service_healthy
+    entrypoint: >
+      sh -c "
+      echo 'Waiting for MySQL to be ready...';
+      until mysqladmin ping -h db -u root -p${MYSQL_ROOT_PASSWORD} --silent; do
+        sleep 5;
+      done;
+      echo 'MySQL is up! Running initialization scripts...';
+      mysql -h db -u root -p${MYSQL_ROOT_PASSWORD} -e \"
+        CREATE DATABASE IF NOT EXISTS ${KEYCLOAK_DATABASE};
+        CREATE USER IF NOT EXISTS '${KEYCLOAK_DB_USER}'@'%' IDENTIFIED BY '${KEYCLOAK_DB_PASSWORD}';
+        GRANT ALL PRIVILEGES ON ${KEYCLOAK_DATABASE}.* TO '${KEYCLOAK_DB_USER}'@'%';
+        FLUSH PRIVILEGES;\";
+      echo 'Database setup completed!';
+      exit 0;"
+    restart: "no"
+    env_file:
+      - .env
+    networks:
+      traefik_traefik:
+        aliases:
+          - db-init.local
+
+  keycloak:
+    image: keycloak/keycloak:25.0
+    container_name: keycloak
+    command: [ "start-dev", "--health-enabled=true" ]
+    environment:
+      KC_DB: mysql
+      KC_DB_URL: jdbc:mysql://db:3306/${KEYCLOAK_DATABASE}?createDatabaseIfNotExist=true
+      KC_DB_USERNAME: ${KEYCLOAK_DB_USER}
+      KC_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD}
+      KC_DB_SCHEMA: keycloak
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN_USERNAME}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
+      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN_USERNAME}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
+      KC_METRICS_ENABLED: true
+      KC_LOG_LEVEL: DEBUG
+      KC_LOG: console
+      LOGGING_JSON: true
+    ports:
+      - "8080:8080"
+      - "9000:9000"
+    mem_limit: 700m
+    env_file:
+      - .env
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      traefik_traefik:
+        aliases:
+          - keycloak.local
+    healthcheck:
+      test: [ "CMD-SHELL", "exec 3<>/dev/tcp/localhost/9000;echo -e 'GET /health/ready HTTP/1.1\r\nhost: http://localhost\r\nConnection: close\r\n\r\n' >&3;if [ $? -eq 0 ]; then echo 'Healthcheck Successful';exit 0;else echo 'Healthcheck Failed';exit 1;fi;" ]
+      interval: 20s
+      timeout: 5s
+      retries: 5

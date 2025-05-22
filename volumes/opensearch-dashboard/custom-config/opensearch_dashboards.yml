@@ -1,0 +1,14 @@
+opensearch.hosts: ["https://opensearch:9200"]
+opensearch.ssl.verificationMode: none
+opensearch.username: "admin"
+opensearch.password: BWbqXm_z12
+server.host: "0.0.0.0"
+server.port: 5601
+opensearch_security.openid.client_id: "opensearch-dashboards"
+opensearch_security.openid.client_secret: "N0FCttSEwjVAg334MACdwbKgw8czNG8m"
+opensearch_security.openid.base_redirect_url: "http://localhost:5601"
+opensearch_security.auth.type: ["basicauth", "openid"]
+opensearch_security.auth.multiple_auth_enabled: true
+opensearch_security.openid.connect_url: "http://keycloak.local:8080/realms/inspiring/.well-known/openid-configuration"
+opensearch_security.openid.scope: "openid profile email"
+opensearch_security.ui.openid.login.buttonname: "Login with keycloak"

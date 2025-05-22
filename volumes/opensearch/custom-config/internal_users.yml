@@ -1,0 +1,5 @@
+admin:
+  hash: "$2y$12$yMoBvxVr9QqfPKgX2sy9eOtjYjynJYF5pxSZL3pRH3ij8OOlChYEu"
+  reserved: true
+  backend_roles:
+    - "admin"
